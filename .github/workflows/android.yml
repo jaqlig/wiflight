@@ -8,22 +8,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v6.1.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4.0.4
         with:
           packages: platform-tools
-      - uses: gradle/actions/setup-gradle@v4
+      # v5 uses Node 24 and retains fully open-source caching.
+      - uses: gradle/actions/setup-gradle@v5.0.2
       - name: Verify official wrapper
         run: python3 scripts/bootstrap-wrapper.py
       - name: Install Android SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Test, lint, and build
         run: ./gradlew --no-daemon testDebugUnitTest lintDebug lintPreview assemblePreview
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: wiflight-optimized-preview
           path: app/build/outputs/apk/preview/app-preview.apk
