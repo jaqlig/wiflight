@@ -34,7 +34,7 @@ Shizuku is only an optional permission-setup helper; automation does not require
 
 ## Setup
 
-1. Install WiFlight.
+1. Install WiFlight from [GitHub Releases](https://github.com/jaqlig/wiflight/releases).
 2. Grant the required airplane-mode control permission using the app’s **Shizuku** option, or run this ADB command:
 
    ```sh
@@ -55,6 +55,12 @@ Requires **JDK 17** and **Android SDK 36**, configured through `ANDROID_HOME` or
 ```
 
 The optimized APK is generated at `app/build/outputs/apk/preview/app-preview.apk`. Preview builds use a development signing key.
+
+## Releases
+
+The [Release APK workflow](.github/workflows/release.yml) builds, tests, signs, and publishes an APK and SHA-256 checksum when a version tag such as `v0.1.0` is pushed. It can also be run manually on `main` with a matching version tag. Signing requires the `WIFLIGHT_KEYSTORE_BASE64` and `WIFLIGHT_KEYSTORE_PASSWORD` repository secrets.
+
+Public releases use a dedicated signing key. To switch from a development build, uninstall it first; this removes its settings, and the permission grant must be repeated. Subsequent GitHub releases can update the app normally. F-Droid normally uses its own signing key.
 
 ## License
 

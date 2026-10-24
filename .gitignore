@@ -8,6 +8,7 @@ android-sdk/
 tools/
 *.jks
 *.keystore
+*.p12
 __pycache__/
 *.pyc
 *-source.zip
