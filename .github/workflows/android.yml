@@ -1,0 +1,27 @@
+name: Android checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify official wrapper
+        run: python3 scripts/bootstrap-wrapper.py
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Test, lint, and build
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug lintPreview assemblePreview
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wiflight-optimized-preview
+          path: app/build/outputs/apk/preview/app-preview.apk

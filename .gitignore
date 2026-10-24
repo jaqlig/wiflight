@@ -1,0 +1,21 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.iml
+.idea/
+android-sdk/
+tools/
+*.jks
+*.keystore
+__pycache__/
+*.pyc
+*-source.zip
+*.apk
+
+# Local artifacts and workspace-only files
+library-files/
+generated_images/
+scratch/
+shared/
+*.log
