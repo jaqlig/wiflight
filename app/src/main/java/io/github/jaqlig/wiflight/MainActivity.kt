@@ -59,6 +59,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -105,6 +106,11 @@ private fun FlightScreen(app: FlightApplication, activity: MainActivity) {
     var airplane by remember { mutableStateOf(app.controller.isEnabled()) }
     var recovery by remember { mutableStateOf(app.controller.needsRecovery()) }
     var batteryUnrestricted by remember { mutableStateOf(BatterySettings.unrestricted(activity)) }
+    val statusBarIcons = remember(activity) { StatusBarIconSettings(activity) }
+    var airplaneIconHidden by remember { mutableStateOf<Boolean?>(null) }
+    var iconSettingError by remember { mutableStateOf<String?>(null) }
+    var iconActionError by remember { mutableStateOf<String?>(null) }
+    var iconChangeGeneration by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     var logsExpanded by rememberSaveable { mutableStateOf(false) }
     // Closed logs do not subscribe the whole screen to log updates.
@@ -114,22 +120,36 @@ private fun FlightScreen(app: FlightApplication, activity: MainActivity) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
 
+    fun refreshIconSetting() {
+        runCatching { statusBarIcons.isAirplaneIconHidden() }
+            .onSuccess { airplaneIconHidden = it; iconSettingError = null }
+            .onFailure {
+                airplaneIconHidden = null
+                iconSettingError = it.message ?: "Unable to read the status-bar icon setting."
+            }
+    }
+
     fun refresh() {
         permission = app.controller.hasPermission()
         airplane = app.controller.isEnabled()
         recovery = app.controller.needsRecovery()
         batteryUnrestricted = BatterySettings.unrestricted(activity)
         permissionSetup?.refresh()
+        refreshIconSetting()
     }
 
-    DisposableEffect(lifecycle, permissionSetup) {
+    DisposableEffect(lifecycle, permissionSetup, statusBarIcons) {
         var wifiLease: AutoCloseable? = null
         var setupObservation: AutoCloseable? = null
         var observingAirplane = false
+        var observingIcon = false
         val airplaneObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
                 airplane = app.controller.isEnabled()
             }
+        }
+        val iconObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { refreshIconSetting() }
         }
         fun startObserving() {
             if (wifiLease == null) wifiLease = wifiMonitor.acquire()
@@ -139,6 +159,13 @@ private fun FlightScreen(app: FlightApplication, activity: MainActivity) {
                     Settings.Global.getUriFor(Settings.Global.AIRPLANE_MODE_ON), false, airplaneObserver,
                 )
                 observingAirplane = true
+            }
+            if (!observingIcon) {
+                runCatching {
+                    activity.contentResolver.registerContentObserver(statusBarIcons.settingUri, false, iconObserver)
+                }.onSuccess { observingIcon = true }.onFailure {
+                    app.store.log("Status-bar icon observation unavailable: ${it.message}")
+                }
             }
             refresh()
         }
@@ -150,6 +177,10 @@ private fun FlightScreen(app: FlightApplication, activity: MainActivity) {
             if (observingAirplane) {
                 activity.contentResolver.unregisterContentObserver(airplaneObserver)
                 observingAirplane = false
+            }
+            if (observingIcon) {
+                activity.contentResolver.unregisterContentObserver(iconObserver)
+                observingIcon = false
             }
         }
         val observer = LifecycleEventObserver { _, event ->
@@ -326,6 +357,50 @@ private fun FlightScreen(app: FlightApplication, activity: MainActivity) {
                     Text(if (state.pauseOnManualChange) "Automation pauses until you turn it back on."
                         else "Automation stays enabled and respects your manual choice until Wi-Fi next connects or disconnects.",
                         style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            item("status-bar-icon") {
+                Section {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Hide airplane-mode icon", style = MaterialTheme.typography.titleLarge)
+                            Text("In the status bar", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = airplaneIconHidden == true,
+                            enabled = permission && !busy && !shizuku.granting && airplaneIconHidden != null,
+                            onCheckedChange = { hidden ->
+                                iconActionError = null
+                                val generation = ++iconChangeGeneration
+                                runCatching { statusBarIcons.setAirplaneIconHidden(hidden) }
+                                    .onSuccess { diagnostic ->
+                                        app.store.log(diagnostic)
+                                        scope.launch {
+                                            // A single delayed read catches a tuner restoring its persistent value.
+                                            delay(1_000)
+                                            if (generation == iconChangeGeneration) {
+                                                refreshIconSetting()
+                                                if (airplaneIconHidden != null && airplaneIconHidden != hidden) {
+                                                    iconActionError = "The icon setting changed back. Check SystemUI Tuner's Persistent Options."
+                                                    app.store.log(iconActionError!!)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .onFailure {
+                                        iconActionError = it.message ?: "Unable to change the airplane icon setting."
+                                        app.store.log("Status-bar icon change failed: $iconActionError")
+                                    }
+                                refreshIconSetting()
+                            })
+                    }
+                    Text("Airplane mode still works normally. This system-wide setting remains after closing or uninstalling WiFlight.",
+                        style = MaterialTheme.typography.bodyMedium)
+                    if (!permission) Text("Grant the airplane-mode control permission above to change this setting.",
+                        style = MaterialTheme.typography.bodySmall)
+                    iconSettingError?.let { Text(it, color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall) }
+                    iconActionError?.let { Text(it, color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall) }
                 }
             }
             item("timing") {

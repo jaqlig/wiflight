@@ -13,6 +13,7 @@
     <queries>
         <intent><action android:name="android.settings.VOICE_CONTROL_AIRPLANE_MODE" /></intent>
         <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="com.android.systemui" />
     </queries>
     <application
         android:name=".FlightApplication"
